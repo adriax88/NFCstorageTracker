@@ -1,1412 +1,344 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
-    <link rel="manifest" href="manifest.json">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Storage Tag & Bin Manager</title>
-
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534'
-                        },
-                        android: {
-                            bgLight: '#f8fafc',
-                            cardLight: '#ffffff',
-                            bgDark: '#0f172a',
-                            cardDark: '#1e293b',
-                            accent: '#3b82f6'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts - Inter / Roboto -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- jsQR Library for QR Code Scanning Fallback -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-
-    <style>
-        body {
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        /* Custom Scrollbar for mobile panels */
-        ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(156, 163, 175, 0.4);
-            border-radius: 4px;
-        }
-
-        /* Pulse animation for scanner */
-        @keyframes scanPulse {
-            0%, 100% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.08); opacity: 0.3; }
-        }
-        .scan-ring {
-            animation: scanPulse 2s infinite ease-in-out;
-        }
-
-        /* Scan line animation */
-        @keyframes scanLine {
-            0% { top: 0%; }
-            50% { top: 90%; }
-            100% { top: 0%; }
-        }
-        .animate-scanline {
-            animation: scanLine 2.5s infinite linear;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFC Storage Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #121318;
+      --card-bg: #1c1e24;
+      --primary: #bb86fc;
+      --primary-variant: #3700b3;
+      --secondary: #03dac6;
+      --text: #e1e1e6;
+      --text-dim: #a0a0b0;
+      --danger: #cf6679;
+      --border: #2e323e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding-bottom: 80px; max-width: 600px; margin: 0 auto; }
+    header { background-color: var(--card-bg); padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+    h1 { font-size: 1.2rem; color: var(--primary); }
+    .container { padding: 16px; }
+    .card { background: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+    .btn { background: var(--primary); color: #000; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+    .btn-secondary { background: transparent; color: var(--secondary); border: 1px solid var(--secondary); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-block { width: 100%; justify-content: center; margin-top: 8px; }
+    .input-group { margin-bottom: 12px; }
+    label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; }
+    input, select, textarea { width: 100%; padding: 10px; background: #0002; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 1rem; }
+    .bin-header { display: flex; justify-content: space-between; align-items: center; }
+    .item-list { margin-top: 12px; }
+    .item-card { background: #252830; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 12px; align-items: center; }
+    .item-img { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; background: var(--border); flex-shrink: 0; }
+    .item-info { flex-grow: 1; }
+    .item-title { font-weight: bold; }
+    .item-date { font-size: 0.75rem; color: var(--text-dim); }
+    .action-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .hidden { display: none !important; }
+    .modal { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 16px; }
+    .modal-content { background: var(--card-bg); width: 100%; max-width: 500px; border-radius: 12px; padding: 20px; border: 1px solid var(--border); }
+  </style>
 </head>
-<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 h-full flex flex-col justify-between antialiased transition-colors duration-200">
+<body>
 
-    <!-- App Container (Mobile Aspect Frame max-w-md) -->
-    <div id="app" class="max-w-md w-full mx-auto h-full flex flex-col bg-slate-50 dark:bg-slate-900 shadow-2xl relative overflow-hidden">
-        
-        <!-- Top App Header -->
-        <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-200 dark:border-slate-700/60 px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
-                    <i class="fa-solid fa-boxes-stacked text-lg"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-slate-900 dark:text-white text-base leading-tight">BinVault NFC</h1>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Smart Storage Inventory</p>
-                </div>
-            </div>
+  <header>
+    <h1>📦 Storage Tracker</h1>
+    <button class="btn btn-secondary" onclick="exportData()">Backup</button>
+  </header>
 
-            <div class="flex items-center gap-1.5">
-                <!-- Theme Toggle Button -->
-                <button id="btn-theme-toggle" class="w-9 h-9 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
-                    <i class="fa-solid fa-moon text-base dark:hidden"></i>
-                    <i class="fa-solid fa-sun text-base hidden dark:block text-amber-400"></i>
-                </button>
-                
-                <!-- NFC Hardware Status Indicator -->
-                <button id="btn-nfc-status" class="px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300">
-                    <span id="nfc-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
-                    <span id="nfc-status-text">Checking NFC</span>
-                </button>
-            </div>
-        </header>
-
-        <!-- Dynamic NFC Compatibility Banner -->
-        <div id="nfc-banner" class="hidden bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
-            <span class="flex items-center gap-1.5">
-                <i class="fa-solid fa-circle-info"></i>
-                <span id="nfc-banner-msg">Web NFC available on Chrome for Android. Desktop/iOS can use QR Scanner or Virtual NFC.</span>
-            </span>
-            <button onclick="document.getElementById('nfc-banner').classList.add('hidden')" class="text-amber-600 dark:text-amber-400 font-bold px-1">&times;</button>
-        </div>
-
-        <!-- Scrollable Main Content Area -->
-        <main id="main-content" class="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
-            
-            <!-- SECTION 1: HOME / BINS LIST VIEW -->
-            <section id="view-home" class="space-y-4">
-                
-                <!-- Quick Actions / Quick Stats Banner -->
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-3.5 text-white shadow-lg shadow-emerald-500/15">
-                        <div class="flex justify-between items-start">
-                            <span class="text-xs font-medium text-emerald-100">Total Bins</span>
-                            <i class="fa-solid fa-box text-emerald-200/60 text-lg"></i>
-                        </div>
-                        <div id="stat-bins-count" class="text-2xl font-bold mt-1">0</div>
-                    </div>
-
-                    <div class="bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl p-3.5 text-white shadow-lg shadow-indigo-500/15">
-                        <div class="flex justify-between items-start">
-                            <span class="text-xs font-medium text-indigo-100">Total Items</span>
-                            <i class="fa-solid fa-cubes text-indigo-200/60 text-lg"></i>
-                        </div>
-                        <div id="stat-items-count" class="text-2xl font-bold mt-1">0</div>
-                    </div>
-                </div>
-
-                <!-- Bins List Header & Filter -->
-                <div class="flex items-center justify-between pt-1">
-                    <h2 class="text-sm font-bold tracking-wide uppercase text-slate-500 dark:text-slate-400">Storage Bins</h2>
-                    <button id="btn-add-bin" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>New Bin</span>
-                    </button>
-                </div>
-
-                <!-- Category Pills Filter -->
-                <div id="category-pills" class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                    <button class="cat-pill active px-3 py-1 rounded-full text-xs font-medium bg-emerald-600 text-white whitespace-nowrap" data-cat="All">All</button>
-                    <button class="cat-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 whitespace-nowrap" data-cat="Attic">Attic</button>
-                    <button class="cat-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 whitespace-nowrap" data-cat="Garage">Garage</button>
-                    <button class="cat-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 whitespace-nowrap" data-cat="Closet">Closet</button>
-                    <button class="cat-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 whitespace-nowrap" data-cat="Basement">Basement</button>
-                </div>
-
-                <!-- Storage Bins Grid -->
-                <div id="bins-grid" class="grid grid-cols-1 gap-3">
-                    <!-- Dynamic Bin Cards inserted here -->
-                </div>
-
-                <!-- Empty State for Bins -->
-                <div id="bins-empty" class="hidden text-center py-10 px-4 bg-white dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                    <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400 mb-3">
-                        <i class="fa-solid fa-box-open text-2xl"></i>
-                    </div>
-                    <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm">No Storage Bins Found</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">Create your first bin or box and attach NFC tags or QR codes to quickly view its contents!</p>
-                    <button id="btn-empty-add-bin" class="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-md inline-flex items-center gap-2">
-                        <i class="fa-solid fa-plus"></i> Create Bin Now
-                    </button>
-                </div>
-
-            </section>
-
-            <!-- SECTION 2: BIN DETAIL VIEW -->
-            <section id="view-bin-detail" class="hidden space-y-4">
-                <!-- Back Button & Actions -->
-                <div class="flex items-center justify-between">
-                    <button id="btn-back-to-bins" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 hover:underline py-1">
-                        <i class="fa-solid fa-arrow-left"></i> All Bins
-                    </button>
-                    <div class="flex items-center gap-2">
-                        <button id="btn-link-nfc" class="px-2.5 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1">
-                            <i class="fa-solid fa-nfc-symbol"></i> Link NFC Tag
-                        </button>
-                        <button id="btn-edit-bin" class="p-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg">
-                            <i class="fa-solid fa-pen-to-square text-base"></i>
-                        </button>
-                        <button id="btn-delete-bin" class="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg">
-                            <i class="fa-solid fa-trash-can text-base"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Bin Header Summary Card -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-700/80 relative overflow-hidden">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <span id="detail-bin-category" class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                Attic
-                            </span>
-                            <h2 id="detail-bin-name" class="text-xl font-bold text-slate-900 dark:text-white mt-1.5">Bin Name</h2>
-                            <p id="detail-bin-location" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
-                                <i class="fa-solid fa-location-dot text-emerald-500"></i> Location Tag
-                            </p>
-                        </div>
-                        
-                        <!-- Tag status badge -->
-                        <div id="detail-tag-status" class="text-right">
-                            <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                <i class="fa-solid fa-wifi text-[10px]"></i> Tagged
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                        <span id="detail-bin-tag-id" class="font-mono text-[11px] truncate max-w-[200px]">NFC Tag ID: Unlinked</span>
-                        <span id="detail-bin-item-count" class="font-semibold text-slate-700 dark:text-slate-300">0 items</span>
-                    </div>
-                </div>
-
-                <!-- Items Section Header -->
-                <div class="flex items-center justify-between pt-2">
-                    <h3 class="text-sm font-bold tracking-wide uppercase text-slate-500 dark:text-slate-400">Contents in Bin</h3>
-                    <button id="btn-add-item" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Add Item</span>
-                    </button>
-                </div>
-
-                <!-- Items Container -->
-                <div id="items-list" class="space-y-3">
-                    <!-- Item Cards rendered here -->
-                </div>
-
-                <!-- Items Empty State -->
-                <div id="items-empty" class="hidden text-center py-8 px-4 bg-white dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                    <i class="fa-solid fa-box text-3xl text-slate-300 dark:text-slate-600 mb-2"></i>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">This bin is empty.</p>
-                    <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Tap 'Add Item' to record items, attach photos and dates.</p>
-                </div>
-            </section>
-
-            <!-- SECTION 3: SEARCH VIEW -->
-            <section id="view-search" class="hidden space-y-4">
-                <div class="relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
-                    <input type="text" id="global-search-input" placeholder="Search items, tags, notes, or bins..." class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
-
-                <div class="flex items-center justify-between text-xs text-slate-500">
-                    <span id="search-results-count">Type above to search stored items</span>
-                </div>
-
-                <div id="search-results-list" class="space-y-3">
-                    <!-- Search items results -->
-                </div>
-            </section>
-
-            <!-- SECTION 4: SCANNER HUB & VIRTUAL SIMULATOR -->
-            <section id="view-scan" class="hidden space-y-4">
-                <div class="text-center py-2">
-                    <h2 class="text-base font-bold text-slate-900 dark:text-white">NFC & Code Reader</h2>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tap an NFC tag on your Android device or scan a QR code</p>
-                </div>
-
-                <!-- Real NFC Active Scanner Box -->
-                <div class="bg-gradient-to-b from-slate-900 to-slate-800 text-white rounded-3xl p-6 text-center shadow-xl border border-slate-700/60 relative overflow-hidden">
-                    <div id="scan-animation" class="w-24 h-24 mx-auto rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center relative mb-4">
-                        <div class="w-28 h-28 absolute rounded-full border border-emerald-500/30 scan-ring"></div>
-                        <i class="fa-solid fa-nfc-symbol text-4xl text-emerald-400"></i>
-                    </div>
-
-                    <h3 id="nfc-scan-heading" class="text-base font-bold text-white">Ready to Scan NFC</h3>
-                    <p id="nfc-scan-desc" class="text-xs text-slate-300 mt-1 max-w-xs mx-auto">Hold the back of your Android device near the NFC tag on your storage bin.</p>
-
-                    <div class="mt-5 flex flex-col gap-2">
-                        <button id="btn-trigger-nfc" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/25 transition">
-                            <i class="fa-solid fa-wifi mr-1"></i> Start Web NFC Listener
-                        </button>
-
-                        <button id="btn-trigger-qr" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-xl text-xs transition">
-                            <i class="fa-solid fa-camera mr-1"></i> Scan QR / Barcode Tag
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Desktop / Developer NFC Simulator Accordion -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                            <i class="fa-solid fa-flask text-amber-500"></i> NFC Virtual Tag Simulator
-                        </h3>
-                        <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">Testing Tool</span>
-                    </div>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Simulate physically tapping an NFC tag when testing on desktop browsers without NFC hardware.</p>
-
-                    <div class="space-y-2">
-                        <label class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Select a Registered Bin Tag to Simulate Tap:</label>
-                        <select id="sim-bin-select" class="w-full py-2 px-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none">
-                            <option value="">-- Choose Bin Tag --</option>
-                        </select>
-                        
-                        <div class="flex gap-2 pt-1">
-                            <button id="btn-sim-tap" class="flex-1 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:bg-slate-800 transition">
-                                <i class="fa-solid fa-hand-pointer mr-1"></i> Simulate NFC Tap
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- SECTION 5: SETTINGS & BACKUP -->
-            <section id="view-settings" class="hidden space-y-4">
-                <h2 class="text-sm font-bold tracking-wide uppercase text-slate-500 dark:text-slate-400">Settings & Data Backup</h2>
-
-                <!-- Backup / Export Section -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
-                    <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-database text-emerald-500"></i> Backup & Restore
-                    </h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Export your bin inventories, photo metadata, and NFC linkages to a JSON file or restore from a previous backup.</p>
-
-                    <div class="grid grid-cols-2 gap-2 pt-1">
-                        <button id="btn-export-json" class="py-2.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
-                            <i class="fa-solid fa-download text-emerald-500"></i> Export JSON
-                        </button>
-                        
-                        <label class="py-2.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition">
-                            <i class="fa-solid fa-upload text-blue-500"></i> Import JSON
-                            <input type="file" id="input-import-json" accept=".json" class="hidden">
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Danger Zone -->
-                <div class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 space-y-2">
-                    <h3 class="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-triangle-exclamation"></i> Reset Local Inventory
-                    </h3>
-                    <p class="text-xs text-rose-600/80 dark:text-rose-300/70">Wipe all local bins and items. Make sure you export a backup first!</p>
-                    <button id="btn-clear-all" class="mt-2 py-2 px-3 bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 active:scale-95 transition">
-                        Clear All Data
-                    </button>
-                </div>
-            </section>
-
-        </main>
-
-        <!-- Android Style Bottom Navigation Bar -->
-        <nav class="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-700/80 fixed bottom-0 left-0 right-0 max-w-md mx-auto z-30">
-            <div class="grid grid-cols-4 h-16">
-                
-                <button data-nav="home" class="nav-btn active flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    <i class="fa-solid fa-boxes-stacked text-lg"></i>
-                    <span class="text-[10px] font-medium mt-1">Bins</span>
-                </button>
-
-                <button data-nav="scan" class="nav-btn flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600">
-                    <div class="relative flex items-center justify-center">
-                        <i class="fa-solid fa-nfc-symbol text-lg"></i>
-                    </div>
-                    <span class="text-[10px] font-medium mt-1">NFC Scan</span>
-                </button>
-
-                <button data-nav="search" class="nav-btn flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600">
-                    <i class="fa-solid fa-magnifying-glass text-lg"></i>
-                    <span class="text-[10px] font-medium mt-1">Search</span>
-                </button>
-
-                <button data-nav="settings" class="nav-btn flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600">
-                    <i class="fa-solid fa-sliders text-lg"></i>
-                    <span class="text-[10px] font-medium mt-1">Settings</span>
-                </button>
-
-            </div>
-        </nav>
-
-        <!-- MODAL 1: ADD / EDIT BIN MODAL -->
-        <div id="modal-bin" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
-            <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 animate-in slide-in-from-bottom duration-200">
-                <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
-                    <h3 id="modal-bin-title" class="font-bold text-slate-900 dark:text-white text-base">Create Storage Bin</h3>
-                    <button onclick="appUI.closeModal('modal-bin')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">&times;</button>
-                </div>
-
-                <form id="form-bin" class="space-y-3">
-                    <input type="hidden" id="bin-id">
-                    
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bin / Box Label Name *</label>
-                        <input type="text" id="bin-name" required placeholder="e.g. Winter Clothes Bin #1" class="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Category</label>
-                            <select id="bin-category" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
-                                <option value="Attic">Attic</option>
-                                <option value="Garage">Garage</option>
-                                <option value="Closet">Closet</option>
-                                <option value="Basement">Basement</option>
-                                <option value="Office">Office</option>
-                                <option value="Shed">Shed</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Location Detail</label>
-                            <input type="text" id="bin-location" placeholder="e.g. Shelf B, Top Rack" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">NFC Tag Identifier (Optional)</label>
-                        <input type="text" id="bin-tag-id" placeholder="Auto-filled when tag scanned or linked" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-800 dark:text-slate-100 focus:outline-none">
-                    </div>
-
-                    <div class="pt-2 flex justify-end gap-2">
-                        <button type="button" onclick="appUI.closeModal('modal-bin')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20">Save Bin</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- MODAL 2: ADD / EDIT ITEM MODAL WITH CAMERA PHOTO SUPPORT -->
-        <div id="modal-item" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity overflow-y-auto">
-            <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 my-auto">
-                <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
-                    <h3 id="modal-item-title" class="font-bold text-slate-900 dark:text-white text-base">Add Item to Bin</h3>
-                    <button onclick="appUI.closeModal('modal-item')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">&times;</button>
-                </div>
-
-                <form id="form-item" class="space-y-3">
-                    <input type="hidden" id="item-id">
-                    <input type="hidden" id="item-photo-data">
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Item Name *</label>
-                        <input type="text" id="item-name" required placeholder="e.g. Heavy Winter Coat, Camping Tent" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
-
-                    <!-- Photo Upload / Snapshot Preview -->
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Photo of Item</label>
-                        <div class="flex items-center gap-3">
-                            <div id="item-photo-preview" class="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden text-slate-400 relative">
-                                <i class="fa-solid fa-camera text-xl"></i>
-                            </div>
-                            <div class="flex-1 space-y-1.5">
-                                <label class="cursor-pointer px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5">
-                                    <i class="fa-solid fa-upload"></i> Upload Image
-                                    <input type="file" id="item-photo-input" accept="image/*" class="hidden">
-                                </label>
-                                <button type="button" id="btn-remove-photo" class="hidden text-[11px] text-rose-500 hover:underline block">Remove photo</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Date Put in Bin</label>
-                            <input type="date" id="item-date" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Quantity</label>
-                            <input type="number" id="item-qty" min="1" value="1" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Notes / Description</label>
-                        <textarea id="item-notes" rows="2" placeholder="e.g. Size XL, includes stakes, fragile" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
-                    </div>
-
-                    <div class="pt-2 flex justify-end gap-2">
-                        <button type="button" onclick="appUI.closeModal('modal-item')" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20">Save Item</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- MODAL 3: QR / BARCODE CAMERA SCANNER -->
-        <div id="modal-qr-scanner" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex flex-col justify-between p-4">
-            <div class="flex justify-between items-center text-white pt-2">
-                <div>
-                    <h3 class="font-bold text-sm">QR / Barcode Camera Scanner</h3>
-                    <p class="text-[11px] text-slate-400">Point your camera at a QR sticker on a bin</p>
-                </div>
-                <button onclick="appUI.closeQRScanner()" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-white">&times;</button>
-            </div>
-
-            <!-- Video Stream Container -->
-            <div class="relative w-full aspect-square max-w-sm mx-auto rounded-3xl overflow-hidden bg-black border-2 border-emerald-500/50 shadow-2xl my-auto">
-                <video id="qr-video" class="w-full h-full object-cover"></video>
-                
-                <!-- Viewfinder Overlay -->
-                <div class="absolute inset-0 border-[30px] border-slate-950/50 flex items-center justify-center pointer-events-none">
-                    <div class="w-full h-full border-2 border-dashed border-emerald-400 rounded-xl relative">
-                        <div class="absolute inset-x-0 h-0.5 bg-emerald-400 animate-scanline"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-center pb-6">
-                <p id="qr-scan-status" class="text-xs text-emerald-400 font-medium">Scanning for QR code...</p>
-                <button onclick="appUI.closeQRScanner()" class="mt-3 px-6 py-2 bg-slate-800 text-white rounded-full text-xs font-semibold">Close Camera</button>
-            </div>
-        </div>
-
-        <!-- Toast Notification Box -->
-        <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden bg-slate-900/90 text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-medium flex items-center gap-2 border border-slate-700/50 transition-all duration-300">
-            <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
-            <span id="toast-msg">Notification Message</span>
-        </div>
-
+  <div class="container">
+    <div class="action-bar">
+      <button class="btn btn-block" onclick="startNfcScan()">📡 Scan NFC Tag</button>
+      <button class="btn btn-secondary btn-block" onclick="openAddBinModal()">+ New Bin</button>
     </div>
 
-    <script>
-        /**
-         * STORAGE ENGINE (IndexedDB / LocalStorage)
-         */
-        class StorageEngine {
-            constructor() {
-                this.STORAGE_KEY = 'binvault_data_v1';
-                this.data = this.loadData();
-            }
-
-            getInitialData() {
-                return {
-                    bins: [
-                        {
-                            id: 'bin-101',
-                            name: 'Holiday Decorations & Lights',
-                            category: 'Attic',
-                            location: 'Shelf 1 Top',
-                            tagId: 'NFC-HOLIDAY-01',
-                            createdAt: new Date().toISOString(),
-                            items: [
-                                {
-                                    id: 'item-1',
-                                    name: 'LED Tree Fairy Lights (Warm White)',
-                                    dateAdded: '2025-11-20',
-                                    quantity: 4,
-                                    notes: 'Working condition, 50ft strands',
-                                    photo: null
-                                },
-                                {
-                                    id: 'item-2',
-                                    name: 'Glass Tree Baubles (Red & Gold)',
-                                    dateAdded: '2025-11-21',
-                                    quantity: 24,
-                                    notes: 'Fragile, padded box',
-                                    photo: null
-                                }
-                            ]
-                        },
-                        {
-                            id: 'bin-102',
-                            name: 'Camping & Outdoor Gear',
-                            category: 'Garage',
-                            location: 'Rack B',
-                            tagId: 'NFC-CAMP-02',
-                            createdAt: new Date().toISOString(),
-                            items: [
-                                {
-                                    id: 'item-3',
-                                    name: '4-Person Waterproof Tent',
-                                    dateAdded: '2025-08-15',
-                                    quantity: 1,
-                                    notes: 'Includes rainfly and aluminum stakes',
-                                    photo: null
-                                }
-                            ]
-                        }
-                    ]
-                };
-            }
-
-            loadData() {
-                try {
-                    const saved = localStorage.getItem(this.STORAGE_KEY);
-                    if (saved) return JSON.parse(saved);
-                } catch (e) {
-                    console.error('Failed to parse storage data', e);
-                }
-                const initial = this.getInitialData();
-                this.saveData(initial);
-                return initial;
-            }
-
-            saveData(dataToSave) {
-                this.data = dataToSave || this.data;
-                try {
-                    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.data));
-                } catch (e) {
-                    console.error('Failed to save to localStorage', e);
-                }
-            }
-
-            getBins() {
-                return this.data.bins || [];
-            }
-
-            getBinById(id) {
-                return this.data.bins.find(b => b.id === id);
-            }
-
-            getBinByTagId(tagId) {
-                if (!tagId) return null;
-                const cleanTag = tagId.trim().toLowerCase();
-                return this.data.bins.find(b => 
-                    b.tagId && b.tagId.toLowerCase() === cleanTag || b.id.toLowerCase() === cleanTag
-                );
-            }
-
-            saveBin(bin) {
-                if (!bin.id) {
-                    bin.id = 'bin-' + Date.now();
-                    bin.createdAt = new Date().toISOString();
-                    bin.items = bin.items || [];
-                    this.data.bins.unshift(bin);
-                } else {
-                    const idx = this.data.bins.findIndex(b => b.id === bin.id);
-                    if (idx !== -1) {
-                        this.data.bins[idx] = { ...this.data.bins[idx], ...bin };
-                    }
-                }
-                this.saveData();
-                return bin;
-            }
-
-            deleteBin(binId) {
-                this.data.bins = this.data.bins.filter(b => b.id !== binId);
-                this.saveData();
-            }
-
-            saveItem(binId, item) {
-                const bin = this.getBinById(binId);
-                if (!bin) return null;
-
-                if (!item.id) {
-                    item.id = 'item-' + Date.now();
-                    bin.items.unshift(item);
-                } else {
-                    const idx = bin.items.findIndex(i => i.id === item.id);
-                    if (idx !== -1) {
-                        bin.items[idx] = { ...bin.items[idx], ...item };
-                    }
-                }
-                this.saveData();
-                return item;
-            }
-
-            deleteItem(binId, itemId) {
-                const bin = this.getBinById(binId);
-                if (bin) {
-                    bin.items = bin.items.filter(i => i.id !== itemId);
-                    this.saveData();
-                }
-            }
-
-            exportJSON() {
-                return JSON.stringify(this.data, null, 2);
-            }
-
-            importJSON(jsonStr) {
-                try {
-                    const parsed = JSON.parse(jsonStr);
-                    if (parsed && Array.isArray(parsed.bins)) {
-                        this.data = parsed;
-                        this.saveData();
-                        return true;
-                    }
-                } catch (e) {
-                    console.error('Invalid import JSON', e);
-                }
-                return false;
-            }
-
-            clearAll() {
-                this.data = { bins: [] };
-                this.saveData();
-            }
-        }
-
-        // Initialize Store
-        const store = new StorageEngine();
-
-        // Audio Sound Effect for Scans
-        function playScanBeep() {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
-                gain.gain.setValueAtTime(0.1, ctx.currentTime);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.15);
-            } catch(e) {
-                // Audio context block fallback
-            }
-        }
-
-        /**
-         * STREAMING_CHUNK:Writing App Controller & Web NFC API Wrapper...
-         */
-        class AppUIController {
-            constructor() {
-                this.currentView = 'home';
-                this.currentBinId = null;
-                this.selectedCategory = 'All';
-                this.ndefReader = null;
-                this.isScanningNFC = false;
-                this.qrStream = null;
-                this.qrAnimFrame = null;
-
-                this.init();
-            }
-
-            init() {
-                this.checkNFCSupport();
-                this.bindEvents();
-                this.renderBins();
-                this.updateStats();
-                this.initTheme();
-            }
-
-            initTheme() {
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    document.documentElement.classList.add('dark');
-                }
-            }
-
-            checkNFCSupport() {
-                const dot = document.getElementById('nfc-dot');
-                const txt = document.getElementById('nfc-status-text');
-                const banner = document.getElementById('nfc-banner');
-
-                if ('NDEFReader' in window) {
-                    dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
-                    txt.textContent = "Web NFC Ready";
-                } else {
-                    dot.className = "w-2 h-2 rounded-full bg-amber-500";
-                    txt.textContent = "NFC Sim / QR Mode";
-                    banner.classList.remove('hidden');
-                }
-            }
-
-            showToast(msg, iconClass = 'fa-circle-check text-emerald-400') {
-                const toast = document.getElementById('toast');
-                const toastMsg = document.getElementById('toast-msg');
-                const toastIcon = document.getElementById('toast-icon');
-
-                toastMsg.textContent = msg;
-                toastIcon.className = `fa-solid ${iconClass}`;
-                toast.classList.remove('hidden');
-
-                setTimeout(() => {
-                    toast.classList.add('hidden');
-                }, 3000);
-            }
-
-            switchView(viewName) {
-                this.currentView = viewName;
-                ['home', 'bin-detail', 'search', 'scan', 'settings'].forEach(v => {
-                    const el = document.getElementById(`view-${v}`);
-                    if (el) el.classList.toggle('hidden', v !== viewName);
-                });
-
-                // Update bottom nav active state
-                document.querySelectorAll('.nav-btn').forEach(btn => {
-                    const isTarget = btn.dataset.nav === (viewName === 'bin-detail' ? 'home' : viewName);
-                    btn.classList.toggle('text-emerald-600', isTarget);
-                    btn.classList.toggle('dark:text-emerald-400', isTarget);
-                    btn.classList.toggle('text-slate-400', !isTarget);
-                });
-
-                if (viewName === 'scan') {
-                    this.populateSimSelect();
-                }
-            }
-
-            updateStats() {
-                const bins = store.getBins();
-                const totalItems = bins.reduce((acc, b) => acc + (b.items ? b.items.length : 0), 0);
-                
-                document.getElementById('stat-bins-count').textContent = bins.length;
-                document.getElementById('stat-items-count').textContent = totalItems;
-            }
-
-            renderBins() {
-                const bins = store.getBins();
-                const grid = document.getElementById('bins-grid');
-                const empty = document.getElementById('bins-empty');
-
-                grid.innerHTML = '';
-
-                const filtered = bins.filter(b => {
-                    if (this.selectedCategory === 'All') return true;
-                    return b.category === this.selectedCategory;
-                });
-
-                if (filtered.length === 0) {
-                    empty.classList.remove('hidden');
-                    return;
-                }
-                empty.classList.add('hidden');
-
-                filtered.forEach(bin => {
-                    const card = document.createElement('div');
-                    card.className = "bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-700/80 hover:shadow-md transition cursor-pointer relative overflow-hidden group";
-                    
-                    const itemCount = bin.items ? bin.items.length : 0;
-                    const hasTag = !!bin.tagId;
-
-                    card.innerHTML = `
-                        <div class="flex items-start justify-between">
-                            <div class="space-y-1 flex-1 pr-2">
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                                    ${bin.category || 'General'}
-                                </span>
-                                <h3 class="font-bold text-slate-900 dark:text-white text-base group-hover:text-emerald-600 transition-colors">${bin.name}</h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                    <i class="fa-solid fa-location-dot text-emerald-500 text-[11px]"></i>
-                                    ${bin.location || 'No location set'}
-                                </p>
-                            </div>
-                            <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
-                                <i class="fa-solid fa-box text-lg"></i>
-                            </div>
-                        </div>
-
-                        <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                            <span class="text-slate-500 dark:text-slate-400 font-medium">
-                                <i class="fa-solid fa-cubes text-slate-400 mr-1"></i>${itemCount} ${itemCount === 1 ? 'item' : 'items'}
-                            </span>
-                            ${hasTag ? `
-                                <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
-                                    <i class="fa-solid fa-wifi text-[10px]"></i> Tagged
-                                </span>
-                            ` : `
-                                <span class="text-[11px] text-slate-400 font-normal">Unlinked</span>
-                            `}
-                        </div>
-                    `;
-
-                    card.onclick = () => this.openBinDetail(bin.id);
-                    grid.appendChild(card);
-                });
-            }
-
-            openBinDetail(binId) {
-                const bin = store.getBinById(binId);
-                if (!bin) return;
-
-                this.currentBinId = binId;
-                document.getElementById('detail-bin-name').textContent = bin.name;
-                document.getElementById('detail-bin-category').textContent = bin.category || 'General';
-                document.getElementById('detail-bin-location').innerHTML = `<i class="fa-solid fa-location-dot text-emerald-500"></i> ${bin.location || 'No location set'}`;
-                
-                const tagStatus = document.getElementById('detail-tag-status');
-                const tagIdEl = document.getElementById('detail-bin-tag-id');
-
-                if (bin.tagId) {
-                    tagStatus.innerHTML = `
-                        <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                            <i class="fa-solid fa-wifi text-[10px]"></i> Tagged
-                        </span>`;
-                    tagIdEl.textContent = `NFC Tag: ${bin.tagId}`;
-                } else {
-                    tagStatus.innerHTML = `
-                        <span class="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
-                            No NFC Tag
-                        </span>`;
-                    tagIdEl.textContent = 'NFC Tag: Unlinked';
-                }
-
-                this.renderItemsList(bin);
-                this.switchView('bin-detail');
-            }
-
-            renderItemsList(bin) {
-                const itemsList = document.getElementById('items-list');
-                const empty = document.getElementById('items-empty');
-                const itemCountEl = document.getElementById('detail-bin-item-count');
-
-                itemsList.innerHTML = '';
-                const items = bin.items || [];
-                itemCountEl.textContent = `${items.length} ${items.length === 1 ? 'item' : 'items'}`;
-
-                if (items.length === 0) {
-                    empty.classList.remove('hidden');
-                    return;
-                }
-                empty.classList.add('hidden');
-
-                items.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = "bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-slate-200/80 dark:border-slate-700/80 flex items-start gap-3 relative";
-
-                    const photoHTML = item.photo ? 
-                        `<img src="${item.photo}" class="w-16 h-16 rounded-xl object-cover bg-slate-100 flex-shrink-0">` :
-                        `<div class="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 flex-shrink-0">
-                            <i class="fa-solid fa-cube text-xl"></i>
-                         </div>`;
-
-                    card.innerHTML = `
-                        ${photoHTML}
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-start justify-between gap-1">
-                                <h4 class="font-bold text-slate-900 dark:text-white text-xs truncate">${item.name}</h4>
-                                <div class="flex items-center gap-1">
-                                    <button onclick="appUI.openEditItemModal('${item.id}')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-pen text-xs"></i></button>
-                                    <button onclick="appUI.deleteItem('${item.id}')" class="text-rose-400 hover:text-rose-600 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
-                                </div>
-                            </div>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">${item.notes || 'No description notes'}</p>
-                            
-                            <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                                <span><i class="fa-regular fa-calendar mr-1"></i>${item.dateAdded || 'No date'}</span>
-                                <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 font-semibold text-slate-700 dark:text-slate-300">Qty: ${item.quantity || 1}</span>
-                            </div>
-                        </div>
-                    `;
-
-                    itemsList.appendChild(card);
-                });
-            }
-
-            /**
-             * STREAMING_CHUNK:Implementing Modal Logic, NFC Listeners & QR Scanner Camera...
-             */
-            openBinModal(binToEdit = null) {
-                const modal = document.getElementById('modal-bin');
-                const title = document.getElementById('modal-bin-title');
-                
-                document.getElementById('form-bin').reset();
-                document.getElementById('bin-id').value = '';
-
-                if (binToEdit) {
-                    title.textContent = 'Edit Storage Bin';
-                    document.getElementById('bin-id').value = binToEdit.id;
-                    document.getElementById('bin-name').value = binToEdit.name;
-                    document.getElementById('bin-category').value = binToEdit.category || 'Attic';
-                    document.getElementById('bin-location').value = binToEdit.location || '';
-                    document.getElementById('bin-tag-id').value = binToEdit.tagId || '';
-                } else {
-                    title.textContent = 'Create Storage Bin';
-                }
-
-                modal.classList.remove('hidden');
-            }
-
-            openItemModal(itemToEdit = null) {
-                const modal = document.getElementById('modal-item');
-                const title = document.getElementById('modal-item-title');
-
-                document.getElementById('form-item').reset();
-                document.getElementById('item-id').value = '';
-                document.getElementById('item-photo-data').value = '';
-                document.getElementById('item-photo-preview').innerHTML = `<i class="fa-solid fa-camera text-xl"></i>`;
-                document.getElementById('btn-remove-photo').classList.add('hidden');
-                document.getElementById('item-date').value = new Date().toISOString().split('T')[0];
-
-                if (itemToEdit) {
-                    title.textContent = 'Edit Item';
-                    document.getElementById('item-id').value = itemToEdit.id;
-                    document.getElementById('item-name').value = itemToEdit.name;
-                    document.getElementById('item-date').value = itemToEdit.dateAdded || new Date().toISOString().split('T')[0];
-                    document.getElementById('item-qty').value = itemToEdit.quantity || 1;
-                    document.getElementById('item-notes').value = itemToEdit.notes || '';
-                    if (itemToEdit.photo) {
-                        document.getElementById('item-photo-data').value = itemToEdit.photo;
-                        document.getElementById('item-photo-preview').innerHTML = `<img src="${itemToEdit.photo}" class="w-full h-full object-cover">`;
-                        document.getElementById('btn-remove-photo').classList.remove('hidden');
-                    }
-                } else {
-                    title.textContent = 'Add Item to Bin';
-                }
-
-                modal.classList.remove('hidden');
-            }
-
-            openEditItemModal(itemId) {
-                const bin = store.getBinById(this.currentBinId);
-                if (!bin) return;
-                const item = bin.items.find(i => i.id === itemId);
-                if (item) this.openItemModal(item);
-            }
-
-            deleteItem(itemId) {
-                if (confirm('Are you sure you want to delete this item?')) {
-                    store.deleteItem(this.currentBinId, itemId);
-                    const bin = store.getBinById(this.currentBinId);
-                    this.renderItemsList(bin);
-                    this.updateStats();
-                    this.showToast('Item deleted');
-                }
-            }
-
-            closeModal(modalId) {
-                document.getElementById(modalId).classList.add('hidden');
-            }
-
-            // Real NDEF Web NFC Listening Handler
-            async startNFCListener() {
-                if (!('NDEFReader' in window)) {
-                    this.showToast('Web NFC not supported on this browser. Try Virtual Simulator below!', 'fa-circle-exclamation text-amber-400');
-                    return;
-                }
-
-                try {
-                    this.ndefReader = new NDEFReader();
-                    await this.ndefReader.scan();
-                    this.isScanningNFC = true;
-
-                    document.getElementById('nfc-scan-heading').textContent = "Listening for NFC...";
-                    document.getElementById('nfc-scan-desc').textContent = "Touch NFC tag to your device back now.";
-
-                    this.ndefReader.addEventListener("reading", ({ message, serialNumber }) => {
-                        playScanBeep();
-                        let tagValue = serialNumber;
-
-                        // Try reading NDEF records
-                        for (const record of message.records) {
-                            if (record.recordType === "text") {
-                                const textDecoder = new TextDecoder(record.encoding);
-                                tagValue = textDecoder.decode(record.data);
-                            }
-                        }
-
-                        this.handleScannedTag(tagValue);
-                    });
-
-                    this.showToast('NFC Scanner Active!');
-                } catch (error) {
-                    console.error('NFC Scan error:', error);
-                    this.showToast('NFC access denied or disabled.', 'fa-circle-xmark text-rose-400');
-                }
-            }
-
-            // Write / Link NFC Tag
-            async linkCurrentBinToNFC() {
-                const bin = store.getBinById(this.currentBinId);
-                if (!bin) return;
-
-                if ('NDEFReader' in window) {
-                    try {
-                        const writer = new NDEFReader();
-                        this.showToast('Hold NFC Tag against device to write...', 'fa-wifi text-amber-400');
-                        await writer.write({
-                            records: [{ recordType: "text", data: bin.id }]
-                        });
-                        bin.tagId = bin.id;
-                        store.saveBin(bin);
-                        this.openBinDetail(bin.id);
-                        playScanBeep();
-                        this.showToast('NFC Tag linked successfully!');
-                    } catch (e) {
-                        console.error('Write error', e);
-                        // Fallback manual entry prompt
-                        const manual = prompt('Enter NFC Tag Serial / Barcode ID to link to this bin:', bin.tagId || bin.id);
-                        if (manual) {
-                            bin.tagId = manual.trim();
-                            store.saveBin(bin);
-                            this.openBinDetail(bin.id);
-                            this.showToast('Bin tag assigned manually!');
-                        }
-                    }
-                } else {
-                    const manual = prompt('Enter NFC Tag ID or Barcode string to link to this bin:', bin.tagId || bin.id);
-                    if (manual) {
-                        bin.tagId = manual.trim();
-                        store.saveBin(bin);
-                        this.openBinDetail(bin.id);
-                        this.showToast('Bin tag assigned manually!');
-                    }
-                }
-            }
-
-            // Tag Processing logic
-            handleScannedTag(tagVal) {
-                if (!tagVal) return;
-
-                const matchedBin = store.getBinByTagId(tagVal);
-                if (matchedBin) {
-                    this.showToast(`Found Bin: ${matchedBin.name}`);
-                    this.openBinDetail(matchedBin.id);
-                } else {
-                    if (confirm(`Unrecognized NFC Tag (${tagVal}). Would you like to create a new storage bin for this tag?`)) {
-                        this.openBinModal();
-                        document.getElementById('bin-tag-id').value = tagVal;
-                    }
-                }
-            }
-
-            // QR Camera WebRTC Scanner
-            async startQRScanner() {
-                const modal = document.getElementById('modal-qr-scanner');
-                const video = document.getElementById('qr-video');
-                modal.classList.remove('hidden');
-
-                try {
-                    this.qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                    video.srcObject = this.qrStream;
-                    video.setAttribute("playsinline", true);
-                    video.play();
-
-                    const scanLoop = () => {
-                        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                            const canvas = document.createElement("canvas");
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
-                            const ctx = canvas.getContext("2d");
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                            const code = jsQR(imgData.data, imgData.width, imgData.height);
-
-                            if (code) {
-                                playScanBeep();
-                                this.closeQRScanner();
-                                this.handleScannedTag(code.data);
-                                return;
-                            }
-                        }
-                        this.qrAnimFrame = requestAnimationFrame(scanLoop);
-                    };
-                    this.qrAnimFrame = requestAnimationFrame(scanLoop);
-
-                } catch (e) {
-                    console.error('Camera Access Error', e);
-                    this.closeQRScanner();
-                    this.showToast('Camera permission denied or camera unavailable.', 'fa-circle-xmark text-rose-400');
-                }
-            }
-
-            closeQRScanner() {
-                if (this.qrStream) {
-                    this.qrStream.getTracks().forEach(track => track.stop());
-                    this.qrStream = null;
-                }
-                if (this.qrAnimFrame) {
-                    cancelAnimationFrame(this.qrAnimFrame);
-                }
-                document.getElementById('modal-qr-scanner').classList.add('hidden');
-            }
-
-            populateSimSelect() {
-                const select = document.getElementById('sim-bin-select');
-                select.innerHTML = '<option value="">-- Choose Bin Tag --</option>';
-                const bins = store.getBins();
-                bins.forEach(b => {
-                    const opt = document.createElement('option');
-                    opt.value = b.tagId || b.id;
-                    opt.textContent = `${b.name} (${b.tagId || 'No tag'})`;
-                    select.appendChild(opt);
-                });
-            }
-
-            performGlobalSearch(query) {
-                const resultsContainer = document.getElementById('search-results-list');
-                const countEl = document.getElementById('search-results-count');
-                resultsContainer.innerHTML = '';
-
-                if (!query.trim()) {
-                    countEl.textContent = 'Type above to search stored items';
-                    return;
-                }
-
-                const q = query.toLowerCase();
-                const bins = store.getBins();
-                let matchCount = 0;
-
-                bins.forEach(bin => {
-                    const matchedItems = (bin.items || []).filter(i => 
-                        i.name.toLowerCase().includes(q) || 
-                        (i.notes && i.notes.toLowerCase().includes(q))
-                    );
-
-                    matchedItems.forEach(item => {
-                        matchCount++;
-                        const card = document.createElement('div');
-                        card.className = "bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-sm border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between cursor-pointer hover:border-emerald-500 transition";
-                        card.innerHTML = `
-                            <div class="flex items-center gap-3">
-                                ${item.photo ? `<img src="${item.photo}" class="w-12 h-12 rounded-xl object-cover">` : 
-                                  `<div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400"><i class="fa-solid fa-cube text-lg"></i></div>`}
-                                <div>
-                                    <h4 class="font-bold text-slate-900 dark:text-white text-xs">${item.name}</h4>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">In: <span class="font-semibold text-emerald-600 dark:text-emerald-400">${bin.name}</span></p>
-                                </div>
-                            </div>
-                            <i class="fa-solid fa-chevron-right text-slate-400 text-xs pr-2"></i>
-                        `;
-                        card.onclick = () => this.openBinDetail(bin.id);
-                        resultsContainer.appendChild(card);
-                    });
-                });
-
-                countEl.textContent = `Found ${matchCount} matching items`;
-            }
-
-            /**
-             * STREAMING_CHUNK:Binding Event Listeners for UI interaction...
-             */
-            bindEvents() {
-                // Bottom Navigation
-                document.querySelectorAll('.nav-btn').forEach(btn => {
-                    btn.addEventListener('click', () => this.switchView(btn.dataset.nav));
-                });
-
-                // Theme Toggle
-                document.getElementById('btn-theme-toggle').addEventListener('click', () => {
-                    document.documentElement.classList.toggle('dark');
-                });
-
-                // Category Filter Pills
-                document.querySelectorAll('.cat-pill').forEach(pill => {
-                    pill.addEventListener('click', (e) => {
-                        document.querySelectorAll('.cat-pill').forEach(p => {
-                            p.classList.remove('bg-emerald-600', 'text-white', 'active');
-                            p.classList.add('bg-slate-200', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
-                        });
-                        e.target.classList.add('bg-emerald-600', 'text-white', 'active');
-                        e.target.classList.remove('bg-slate-200', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
-                        
-                        this.selectedCategory = e.target.dataset.cat;
-                        this.renderBins();
-                    });
-                });
-
-                // Add Bin Buttons
-                document.getElementById('btn-add-bin').addEventListener('click', () => this.openBinModal());
-                document.getElementById('btn-empty-add-bin').addEventListener('click', () => this.openBinModal());
-
-                // Edit/Delete Bin
-                document.getElementById('btn-back-to-bins').addEventListener('click', () => this.switchView('home'));
-                document.getElementById('btn-edit-bin').addEventListener('click', () => {
-                    const bin = store.getBinById(this.currentBinId);
-                    if (bin) this.openBinModal(bin);
-                });
-                document.getElementById('btn-delete-bin').addEventListener('click', () => {
-                    if (confirm('Are you sure you want to delete this bin and all contents?')) {
-                        store.deleteBin(this.currentBinId);
-                        this.renderBins();
-                        this.updateStats();
-                        this.switchView('home');
-                        this.showToast('Bin deleted');
-                    }
-                });
-
-                // Add Item Buttons
-                document.getElementById('btn-add-item').addEventListener('click', () => this.openItemModal());
-
-                // Form Submit - Bin
-                document.getElementById('form-bin').addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    const id = document.getElementById('bin-id').value;
-                    const newBin = {
-                        id: id || null,
-                        name: document.getElementById('bin-name').value,
-                        category: document.getElementById('bin-category').value,
-                        location: document.getElementById('bin-location').value,
-                        tagId: document.getElementById('bin-tag-id').value.trim()
-                    };
-                    const saved = store.saveBin(newBin);
-                    this.closeModal('modal-bin');
-                    this.renderBins();
-                    this.updateStats();
-                    this.showToast('Bin saved successfully!');
-                    if (this.currentView === 'bin-detail') this.openBinDetail(saved.id);
-                });
-
-                // Photo Upload Handler (Base64 conversion)
-                document.getElementById('item-photo-input').addEventListener('change', (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => {
-                            const base64 = evt.target.result;
-                            document.getElementById('item-photo-data').value = base64;
-                            document.getElementById('item-photo-preview').innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
-                            document.getElementById('btn-remove-photo').classList.remove('hidden');
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-
-                document.getElementById('btn-remove-photo').addEventListener('click', () => {
-                    document.getElementById('item-photo-data').value = '';
-                    document.getElementById('item-photo-preview').innerHTML = `<i class="fa-solid fa-camera text-xl"></i>`;
-                    document.getElementById('btn-remove-photo').classList.add('hidden');
-                });
-
-                // Form Submit - Item
-                document.getElementById('form-item').addEventListener('submit', (e) => {
-                    e.preventDefault();
-                    if (!this.currentBinId) return;
-
-                    const newItem = {
-                        id: document.getElementById('item-id').value || null,
-                        name: document.getElementById('item-name').value,
-                        dateAdded: document.getElementById('item-date').value,
-                        quantity: parseInt(document.getElementById('item-qty').value) || 1,
-                        notes: document.getElementById('item-notes').value,
-                        photo: document.getElementById('item-photo-data').value || null
-                    };
-
-                    store.saveItem(this.currentBinId, newItem);
-                    this.closeModal('modal-item');
-                    const bin = store.getBinById(this.currentBinId);
-                    this.renderItemsList(bin);
-                    this.updateStats();
-                    this.showToast('Item saved to bin!');
-                });
-
-                // Link NFC Button inside Bin Detail
-                document.getElementById('btn-link-nfc').addEventListener('click', () => this.linkCurrentBinToNFC());
-
-                // NFC & QR Triggers inside Scan View
-                document.getElementById('btn-trigger-nfc').addEventListener('click', () => this.startNFCListener());
-                document.getElementById('btn-trigger-qr').addEventListener('click', () => this.startQRScanner());
-
-                // Virtual Tap Simulator Trigger
-                document.getElementById('btn-sim-tap').addEventListener('click', () => {
-                    const selectedTag = document.getElementById('sim-bin-select').value;
-                    if (!selectedTag) {
-                        this.showToast('Please select a bin tag to simulate tap', 'fa-circle-exclamation text-amber-400');
-                        return;
-                    }
-                    playScanBeep();
-                    this.handleScannedTag(selectedTag);
-                });
-
-                // Global Search Input
-                document.getElementById('global-search-input').addEventListener('input', (e) => {
-                    this.performGlobalSearch(e.target.value);
-                });
-
-                // Export / Import
-                document.getElementById('btn-export-json').addEventListener('click', () => {
-                    const dataStr = store.exportJSON();
-                    const blob = new Blob([dataStr], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `binvault_backup_${new Date().toISOString().split('T')[0]}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    this.showToast('Inventory JSON exported!');
-                });
-
-                document.getElementById('input-import-json').addEventListener('change', (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => {
-                            const success = store.importJSON(evt.target.result);
-                            if (success) {
-                                this.renderBins();
-                                this.updateStats();
-                                this.showToast('Inventory backup restored!');
-                            } else {
-                                this.showToast('Invalid JSON file format.', 'fa-circle-xmark text-rose-400');
-                            }
-                        };
-                        reader.readAsText(file);
-                    }
-                });
-
-                // Clear Data
-                document.getElementById('btn-clear-all').addEventListener('click', () => {
-                    if (confirm('Are you sure you want to clear all storage bins?')) {
-                        store.clearAll();
-                        this.renderBins();
-                        this.updateStats();
-                        this.showToast('All inventory wiped.');
-                    }
-                });
-            }
-        }
-
-        // Boot App on Load
-        let appUI;
-        window.onload = () => {
-            appUI = new AppUIController();
+    <div id="statusMessage" class="card hidden"></div>
+
+    <div id="mainView">
+      <h2>Your Storage Bins</h2>
+      <div id="binsList" style="margin-top: 12px;"></div>
+    </div>
+
+    <!-- Bin Details View -->
+    <div id="binDetailView" class="hidden">
+      <button class="btn btn-secondary" onclick="showMainView()" style="margin-bottom: 12px;">← Back to Bins</button>
+      <div class="card">
+        <div class="bin-header">
+          <h2 id="detailBinName">Bin Name</h2>
+          <span id="detailBinTag" style="font-size: 0.8rem; color: var(--primary);">Tag: None</span>
+        </div>
+        <p id="detailBinCategory" style="color: var(--text-dim); font-size: 0.85rem; margin-top: 4px;"></p>
+        
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button class="btn" onclick="writeNfcTag()">🏷️ Write NFC Tag</button>
+          <button class="btn btn-danger" onclick="deleteCurrentBin()">Delete Bin</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Items in this Bin</h3>
+        <button class="btn btn-block" onclick="openAddItemModal()" style="margin-top: 8px;">+ Add Item to Bin</button>
+        <div id="itemsContainer" class="item-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Bin Modal -->
+  <div id="addBinModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Add New Storage Bin</h3>
+      <div class="input-group" style="margin-top: 12px;">
+        <label>Bin Name / ID</label>
+        <input type="text" id="newBinName" placeholder="e.g. Bin #1 - Halloween">
+      </div>
+      <div class="input-group">
+        <label>Category / Location</label>
+        <input type="text" id="newBinCategory" placeholder="e.g. Attic, Garage, Closet">
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="closeModal('addBinModal')">Cancel</button>
+        <button class="btn" onclick="saveNewBin()">Save Bin</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Item Modal -->
+  <div id="addItemModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Add Item to Bin</h3>
+      <div class="input-group" style="margin-top: 12px;">
+        <label>Item Name</label>
+        <input type="text" id="newItemName" placeholder="e.g. Christmas Lights">
+      </div>
+      <div class="input-group">
+        <label>Photo (Optional)</label>
+        <input type="file" id="newItemPhoto" accept="image/*" capture="environment">
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="closeModal('addItemModal')">Cancel</button>
+        <button class="btn" onclick="saveNewItem()">Save Item</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let bins = JSON.parse(localStorage.getItem('nfc_storage_bins') || '[]');
+    let currentBinId = null;
+
+    function saveToStorage() {
+      localStorage.setItem('nfc_storage_bins', JSON.stringify(bins));
+    }
+
+    function renderBins() {
+      const list = document.getElementById('binsList');
+      list.innerHTML = '';
+      if (bins.length === 0) {
+        list.innerHTML = '<p style="color: var(--text-dim); text-align: center; padding: 20px;">No bins created yet. Tap "+ New Bin" to start!</p>';
+        return;
+      }
+      bins.forEach(bin => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.onclick = () => openBinDetail(bin.id);
+        card.innerHTML = `
+          <div class="bin-header">
+            <strong>${bin.name}</strong>
+            <span style="font-size:0.8rem; color:var(--primary);">${bin.items.length} items</span>
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Location: ${bin.category || 'Unassigned'}</div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function openAddBinModal() {
+      document.getElementById('newBinName').value = '';
+      document.getElementById('newBinCategory').value = '';
+      document.getElementById('addBinModal').classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+    }
+
+    function saveNewBin() {
+      const name = document.getElementById('newBinName').value.trim();
+      const category = document.getElementById('newBinCategory').value.trim();
+      if (!name) return alert('Please enter a bin name');
+
+      const newBin = {
+        id: 'BIN-' + Date.now(),
+        name: name,
+        category: category,
+        items: []
+      };
+
+      bins.push(newBin);
+      saveToStorage();
+      renderBins();
+      closeModal('addBinModal');
+      openBinDetail(newBin.id);
+    }
+
+    function openBinDetail(binId) {
+      currentBinId = binId;
+      const bin = bins.find(b => b.id === binId);
+      if (!bin) return;
+
+      document.getElementById('detailBinName').innerText = bin.name;
+      document.getElementById('detailBinCategory').innerText = 'Location: ' + (bin.category || 'None');
+      document.getElementById('detailBinTag').innerText = 'Tag ID: ' + bin.id;
+
+      renderItems(bin);
+      document.getElementById('mainView').classList.add('hidden');
+      document.getElementById('binDetailView').classList.remove('hidden');
+    }
+
+    function renderItems(bin) {
+      const container = document.getElementById('itemsContainer');
+      container.innerHTML = '';
+
+      if (!bin.items || bin.items.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-dim); font-size:0.85rem; text-align:center; padding: 12px;">This bin is empty.</p>';
+        return;
+      }
+
+      bin.items.forEach((item, index) => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'item-card';
+        const imgMarkup = item.photo ? `<img src="${item.photo}" class="item-img">` : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;">📦</div>`;
+        itemCard.innerHTML = `
+          ${imgMarkup}
+          <div class="item-info">
+            <div class="item-title">${item.name}</div>
+            <div class="item-date">Added: ${item.date}</div>
+          </div>
+          <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="deleteItem(${index})">X</button>
+        `;
+        container.appendChild(itemCard);
+      });
+    }
+
+    function openAddItemModal() {
+      document.getElementById('newItemName').value = '';
+      document.getElementById('newItemPhoto').value = '';
+      document.getElementById('addItemModal').classList.remove('hidden');
+    }
+
+    function saveNewItem() {
+      const name = document.getElementById('newItemName').value.trim();
+      if (!name) return alert('Please enter an item name');
+
+      const photoInput = document.getElementById('newItemPhoto');
+      const bin = bins.find(b => b.id === currentBinId);
+      if (!bin) return;
+
+      const dateStr = new Date().toLocaleDateString();
+
+      if (photoInput.files && photoInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          bin.items.push({ name: name, date: dateStr, photo: e.target.result });
+          saveToStorage();
+          renderItems(bin);
+          renderBins();
+          closeModal('addItemModal');
         };
-    </script>
-    <script>
-  if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js');
-     }
-    </script>
+        reader.readAsDataURL(photoInput.files[0]);
+      } else {
+        bin.items.push({ name: name, date: dateStr, photo: null });
+        saveToStorage();
+        renderItems(bin);
+        renderBins();
+        closeModal('addItemModal');
+      }
+    }
+
+    function deleteItem(index) {
+      const bin = bins.find(b => b.id === currentBinId);
+      if (!bin) return;
+      bin.items.splice(index, 1);
+      saveToStorage();
+      renderItems(bin);
+      renderBins();
+    }
+
+    function deleteCurrentBin() {
+      if (!confirm('Are you sure you want to delete this bin?')) return;
+      bins = bins.filter(b => b.id !== currentBinId);
+      saveToStorage();
+      renderBins();
+      showMainView();
+    }
+
+    function showMainView() {
+      document.getElementById('binDetailView').classList.add('hidden');
+      document.getElementById('mainView').classList.remove('hidden');
+    }
+
+    async function writeNfcTag() {
+      if (!('NDEFReader' in window)) {
+        return alert('Web NFC is not supported on this browser/device. Ensure you are using Chrome on Android with HTTPS.');
+      }
+      try {
+        const ndef = new NDEFReader();
+        await ndef.write({
+          records: [{ recordType: "text", data: currentBinId }]
+        });
+        alert('✅ Success! Bin ID (' + currentBinId + ') written to NFC tag.');
+      } catch (error) {
+        alert('Error writing NFC tag: ' + error);
+      }
+    }
+
+    async function startNfcScan() {
+      if (!('NDEFReader' in window)) {
+        return alert('Web NFC is not supported on this browser/device.');
+      }
+      try {
+        const ndef = new NDEFReader();
+        await ndef.scan();
+        alert('📡 Ready to scan! Tap an NFC tag to the back of your phone.');
+
+        ndef.addEventListener("reading", ({ message, serialNumber }) => {
+          for (const record of message.records) {
+            const textDecoder = new TextDecoder(record.encoding);
+            const tagData = textDecoder.decode(record.data);
+            const foundBin = bins.find(b => b.id === tagData);
+            if (foundBin) {
+              openBinDetail(foundBin.id);
+            } else {
+              alert('Scanned Tag ID: ' + tagData + ' - No matching bin found in storage.');
+            }
+          }
+        });
+      } catch (error) {
+        alert('NFC Scan Error: ' + error);
+      }
+    }
+
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(bins));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "storage_bins_backup.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // Initial load
+    renderBins();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
 </body>
 </html>
