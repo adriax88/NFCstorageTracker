@@ -1,0 +1,16 @@
+{
+  "name": "NFC Storage Tracker",
+  "short_name": "Storage Tracker",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121318",
+  "theme_color": "#121318",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2897/2897785.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
