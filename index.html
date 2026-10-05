@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NFC Storage Tracker v1.4</title>
+  <title>NFC Storage Tracker v1.5</title>
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
@@ -17,6 +17,7 @@
       --text-dim: #a0a0b0;
       --danger: #cf6679;
       --border: #2e323e;
+      --success: #81c784;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding-bottom: 80px; max-width: 600px; margin: 0 auto; }
@@ -42,6 +43,12 @@
     .hidden { display: none !important; }
     .modal { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 16px; }
     .modal-content { background: var(--card-bg); width: 100%; max-width: 500px; border-radius: 12px; padding: 20px; border: 1px solid var(--border); }
+    
+    .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: bold; display: inline-block; }
+    .badge-success { background: rgba(129, 199, 132, 0.2); color: var(--success); border: 1px solid var(--success); }
+    .badge-warning { background: rgba(255, 183, 77, 0.2); color: #ffb74d; border: 1px solid #ffb74d; }
+
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--secondary); color: #000; padding: 12px 24px; border-radius: 25px; font-weight: bold; font-size: 0.9rem; z-index: 1000; transition: opacity 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
   </style>
 </head>
 <body>
@@ -50,6 +57,8 @@
     <h1>📦 Storage Tracker</h1>
     <button class="btn btn-secondary" onclick="exportData()">Backup</button>
   </header>
+
+  <div id="toast" class="hidden"></div>
 
   <div class="container">
     <div class="action-bar">
@@ -67,13 +76,15 @@
       <button class="btn btn-secondary" onclick="showMainView()" style="margin-bottom: 12px;">← Back to Bins</button>
       <div class="card">
         <div class="bin-header">
-          <h2 id="detailBinName">Bin Name</h2>
-          <span id="detailBinTag" style="font-size: 0.8rem; color: var(--primary);">Tag: None</span>
+          <div>
+            <h2 id="detailBinName">Bin Name</h2>
+            <p id="detailBinCategory" style="color: var(--text-dim); font-size: 0.85rem; margin-top: 2px;"></p>
+          </div>
+          <div id="detailTagStatus"></div>
         </div>
-        <p id="detailBinCategory" style="color: var(--text-dim); font-size: 0.85rem; margin-top: 4px;"></p>
         
-        <div style="display: flex; gap: 8px; margin-top: 12px;">
-          <button class="btn" onclick="writeNfcTag()">🏷️ Write NFC Tag</button>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button class="btn" onclick="writeNfcTag()">🏷️️ Write NFC Tag</button>
           <button class="btn btn-danger" onclick="deleteCurrentBin()">Delete Bin</button>
         </div>
       </div>
@@ -86,10 +97,10 @@
     </div>
   </div>
 
-  <!-- Add Bin Modal -->
+  <!-- Add / Edit Bin Modal -->
   <div id="addBinModal" class="modal hidden">
     <div class="modal-content">
-      <h3>Add New Storage Bin</h3>
+      <h3 id="binModalTitle">Add New Storage Bin</h3>
       <div class="input-group" style="margin-top: 12px;">
         <label>Bin Name / ID</label>
         <input type="text" id="newBinName" placeholder="e.g. Bin #1 - Halloween">
@@ -99,16 +110,16 @@
         <input type="text" id="newBinCategory" placeholder="e.g. Attic, Garage, Closet">
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
-        <button class="btn btn-secondary" onclick="closeModal('addBinModal')">Cancel</button>
-        <button class="btn" onclick="saveNewBin()">Save Bin</button>
+        <button class="btn btn-secondary" type="button" onclick="closeModal('addBinModal')">Cancel</button>
+        <button class="btn" type="button" onclick="saveNewBin()">Save Bin</button>
       </div>
     </div>
   </div>
 
-  <!-- Add Item Modal -->
+  <!-- Add / Edit Item Modal -->
   <div id="addItemModal" class="modal hidden">
     <div class="modal-content">
-      <h3>Add Item to Bin</h3>
+      <h3 id="itemModalTitle">Add Item to Bin</h3>
       <div class="input-group" style="margin-top: 12px;">
         <label>Item Name</label>
         <input type="text" id="newItemName" placeholder="e.g. Christmas Lights">
@@ -129,7 +140,7 @@
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
         <button class="btn btn-secondary" type="button" onclick="closeModal('addItemModal')">Cancel</button>
-        <button class="btn" type="button" onclick="saveNewItem()">Save Item</button>
+        <button class="btn" id="saveItemBtn" type="button" onclick="saveNewItem()">Save Item</button>
       </div>
     </div>
   </div>
@@ -137,7 +148,18 @@
   <script>
     let bins = JSON.parse(localStorage.getItem('nfc_storage_bins') || localStorage.getItem('nfc_storage_app_data') || '[]');
     let currentBinId = null;
+    let editingItemIndex = null;
+    let currentPhotoData = null;
     let isWritingNFC = false;
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 2500);
+    }
 
     function saveToStorage() {
       localStorage.setItem('nfc_storage_bins', JSON.stringify(bins));
@@ -155,12 +177,20 @@
         const card = document.createElement('div');
         card.className = 'card';
         card.onclick = function() { openBinDetail(bin.id); };
+        
+        const tagBadge = bin.hasNfcTag 
+          ? `<span class="badge badge-success">🏷️ Tagged</span>`
+          : `<span class="badge badge-warning">⚠️ No Tag</span>`;
+
         card.innerHTML = `
           <div class="bin-header">
             <strong>${bin.name}</strong>
-            <span style="font-size:0.8rem; color:var(--primary);">${bin.items ? bin.items.length : 0} items</span>
+            ${tagBadge}
           </div>
-          <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Location: ${bin.category || 'Unassigned'}</div>
+          <div style="font-size:0.8rem; color:var(--text-dim); margin-top:6px; display:flex; justify-content:space-between;">
+            <span>Location: ${bin.category || 'Unassigned'}</span>
+            <span style="color:var(--primary);">${bin.items ? bin.items.length : 0} items</span>
+          </div>
         `;
         list.appendChild(card);
       });
@@ -185,6 +215,7 @@
         id: 'BIN-' + Date.now(),
         name: name,
         category: category,
+        hasNfcTag: false,
         items: []
       };
 
@@ -192,6 +223,7 @@
       saveToStorage();
       renderBins();
       closeModal('addBinModal');
+      showToast('✓ Bin Created!');
       openBinDetail(newBin.id);
     }
 
@@ -202,7 +234,13 @@
 
       document.getElementById('detailBinName').innerText = bin.name;
       document.getElementById('detailBinCategory').innerText = 'Location: ' + (bin.category || 'None');
-      document.getElementById('detailBinTag').innerText = 'Tag ID: ' + bin.id;
+      
+      const tagStatusDiv = document.getElementById('detailTagStatus');
+      if (bin.hasNfcTag) {
+        tagStatusDiv.innerHTML = `<span class="badge badge-success">🏷️️ Tag Written</span>`;
+      } else {
+        tagStatusDiv.innerHTML = `<span class="badge badge-warning">⚠️ Tag Pending</span>`;
+      }
 
       renderItems(bin);
       document.getElementById('mainView').classList.add('hidden');
@@ -228,23 +266,47 @@
             <div class="item-title">${item.name}</div>
             <div class="item-date">Added: ${item.date}</div>
           </div>
-          <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="deleteItem(${index})">X</button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="openEditItemModal(${index})">✏️ Edit</button>
+            <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="deleteItem(${index})">X</button>
+          </div>
         `;
         container.appendChild(itemCard);
       });
     }
 
     function openAddItemModal() {
+      editingItemIndex = null;
+      currentPhotoData = null;
+      document.getElementById('itemModalTitle').innerText = 'Add Item to Bin';
       document.getElementById('newItemName').value = '';
       document.getElementById('newItemPhotoCamera').value = '';
       document.getElementById('newItemPhotoGallery').value = '';
       document.getElementById('selectedPhotoName').innerText = '';
+      document.getElementById('saveItemBtn').innerText = 'Save Item';
+      document.getElementById('addItemModal').classList.remove('hidden');
+    }
+
+    function openEditItemModal(index) {
+      editingItemIndex = index;
+      const bin = bins.find(b => b.id === currentBinId);
+      if (!bin || !bin.items[index]) return;
+
+      const item = bin.items[index];
+      currentPhotoData = item.photo || null;
+
+      document.getElementById('itemModalTitle').innerText = 'Edit Item';
+      document.getElementById('newItemName').value = item.name;
+      document.getElementById('newItemPhotoCamera').value = '';
+      document.getElementById('newItemPhotoGallery').value = '';
+      document.getElementById('selectedPhotoName').innerText = item.photo ? '✓ Existing photo attached' : '';
+      document.getElementById('saveItemBtn').innerText = 'Update Item';
       document.getElementById('addItemModal').classList.remove('hidden');
     }
 
     function updatePhotoStatus(source) {
       const statusDiv = document.getElementById('selectedPhotoName');
-      statusDiv.innerText = `✓ Photo attached (${source})`;
+      statusDiv.innerText = `✓ New Photo Attached (${source})`;
     }
 
     function saveNewItem() {
@@ -256,47 +318,68 @@
       }
 
       const bin = bins.find(b => b.id === currentBinId);
-      if (!bin) {
-        alert('Error: Bin not found');
-        return;
-      }
-
+      if (!bin) return;
       if (!bin.items) bin.items = [];
+
+      const saveBtn = document.getElementById('saveItemBtn');
+      saveBtn.innerText = 'Saving...';
+      saveBtn.disabled = true;
 
       const cameraInput = document.getElementById('newItemPhotoCamera');
       const galleryInput = document.getElementById('newItemPhotoGallery');
       const dateStr = new Date().toLocaleDateString();
       const photoFile = (cameraInput && cameraInput.files && cameraInput.files[0]) || (galleryInput && galleryInput.files && galleryInput.files[0]);
 
-      if (photoFile) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          bin.items.push({ name: name, date: dateStr, photo: e.target.result });
-          saveToStorage();
-          renderItems(bin);
-          renderBins();
-          closeModal('addItemModal');
-        };
-        reader.onerror = function() {
-          alert('Error reading photo file');
-        };
-        reader.readAsDataURL(photoFile);
-      } else {
-        bin.items.push({ name: name, date: dateStr, photo: null });
+      const finishSave = (photo) => {
+        if (editingItemIndex !== null) {
+          bin.items[editingItemIndex] = {
+            name: name,
+            date: bin.items[editingItemIndex].date || dateStr,
+            photo: photo
+          };
+          showToast('✓ Item Updated!');
+        } else {
+          bin.items.push({
+            name: name,
+            date: dateStr,
+            photo: photo
+          });
+          showToast('✓ Item Saved!');
+        }
+
         saveToStorage();
         renderItems(bin);
         renderBins();
+        saveBtn.innerText = editingItemIndex !== null ? 'Update Item' : 'Save Item';
+        saveBtn.disabled = false;
         closeModal('addItemModal');
+      };
+
+      if (photoFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          finishSave(e.target.result);
+        };
+        reader.onerror = function() {
+          alert('Error reading photo file');
+          saveBtn.innerText = 'Save Item';
+          saveBtn.disabled = false;
+        };
+        reader.readAsDataURL(photoFile);
+      } else {
+        finishSave(currentPhotoData);
       }
     }
 
     function deleteItem(index) {
+      if (!confirm('Remove this item from the bin?')) return;
       const bin = bins.find(b => b.id === currentBinId);
       if (!bin) return;
       bin.items.splice(index, 1);
       saveToStorage();
       renderItems(bin);
       renderBins();
+      showToast('Item deleted');
     }
 
     function deleteCurrentBin() {
@@ -305,6 +388,7 @@
       saveToStorage();
       renderBins();
       showMainView();
+      showToast('Bin deleted');
     }
 
     function showMainView() {
@@ -324,7 +408,16 @@
         await ndef.write({
           records: [{ recordType: "text", data: currentBinId }]
         });
-        alert('✅ Success! Bin ID (' + currentBinId + ') written to NFC tag.');
+        
+        const bin = bins.find(b => b.id === currentBinId);
+        if (bin) {
+          bin.hasNfcTag = true;
+          saveToStorage();
+          openBinDetail(bin.id);
+          renderBins();
+        }
+
+        showToast('✅ Tag Written Successfully!');
       } catch (error) {
         if (error.name !== 'AbortError') {
           alert('Error writing NFC tag: ' + error);
@@ -341,7 +434,7 @@
       try {
         const ndef = new NDEFReader();
         await ndef.scan();
-        alert('📡 Ready to scan! Touch an NFC tag to the back of your phone to open its bin.');
+        showToast('📡 NFC Scanner Active');
 
         ndef.addEventListener("reading", ({ message, serialNumber }) => {
           for (const record of message.records) {
@@ -349,6 +442,7 @@
             const tagData = textDecoder.decode(record.data);
             const foundBin = bins.find(b => b.id === tagData);
             if (foundBin) {
+              showToast('🎯 Tag Matched!');
               openBinDetail(foundBin.id);
             } else {
               alert('Scanned Tag ID: ' + tagData + ' - No matching bin found in storage.');
@@ -368,13 +462,14 @@
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      showToast('Backup Downloaded!');
     }
 
     renderBins();
   </script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=1.4');
+      navigator.serviceWorker.register('sw.js?v=1.5');
     }
   </script>
 </body>
