@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NFC Storage Tracker</title>
+  <title>NFC Storage Tracker v1.2</title>
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
@@ -226,4 +226,147 @@
         const imgMarkup = item.photo ? `<img src="${item.photo}" class="item-img">` : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;">📦</div>`;
         itemCard.innerHTML = `
           ${imgMarkup}
-          <div class="
+          <div class="item-info">
+            <div class="item-title">${item.name}</div>
+            <div class="item-date">Added: ${item.date}</div>
+          </div>
+          <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="deleteItem(${index})">X</button>
+        `;
+        container.appendChild(itemCard);
+      });
+    }
+
+    function openAddItemModal() {
+      document.getElementById('newItemName').value = '';
+      document.getElementById('newItemPhotoCamera').value = '';
+      document.getElementById('newItemPhotoGallery').value = '';
+      document.getElementById('selectedPhotoName').innerText = '';
+      document.getElementById('addItemModal').classList.remove('hidden');
+    }
+
+    function updatePhotoStatus(source) {
+      const statusDiv = document.getElementById('selectedPhotoName');
+      statusDiv.innerText = `✓ Photo attached (${source})`;
+    }
+
+    function saveNewItem() {
+      const name = document.getElementById('newItemName').value.trim();
+      if (!name) return alert('Please enter an item name');
+
+      const cameraInput = document.getElementById('newItemPhotoCamera');
+      const galleryInput = document.getElementById('newItemPhotoGallery');
+      const bin = bins.find(b => b.id === currentBinId);
+      if (!bin) return;
+
+      const dateStr = new Date().toLocaleDateString();
+      const photoFile = (cameraInput.files && cameraInput.files[0]) || (galleryInput.files && galleryInput.files[0]);
+
+      if (photoFile) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          bin.items.push({ name: name, date: dateStr, photo: e.target.result });
+          saveToStorage();
+          renderItems(bin);
+          renderBins();
+          closeModal('addItemModal');
+        };
+        reader.readAsDataURL(photoFile);
+      } else {
+        bin.items.push({ name: name, date: dateStr, photo: null });
+        saveToStorage();
+        renderItems(bin);
+        renderBins();
+        closeModal('addItemModal');
+      }
+    }
+
+    function deleteItem(index) {
+      const bin = bins.find(b => b.id === currentBinId);
+      if (!bin) return;
+      bin.items.splice(index, 1);
+      saveToStorage();
+      renderItems(bin);
+      renderBins();
+    }
+
+    function deleteCurrentBin() {
+      if (!confirm('Are you sure you want to delete this bin?')) return;
+      bins = bins.filter(b => b.id !== currentBinId);
+      saveToStorage();
+      renderBins();
+      showMainView();
+    }
+
+    function showMainView() {
+      document.getElementById('binDetailView').classList.add('hidden');
+      document.getElementById('mainView').classList.remove('hidden');
+    }
+
+    async function writeNfcTag() {
+      if (isWritingNFC) return;
+      if (!('NDEFReader' in window)) {
+        return alert('Web NFC is not supported on this browser/device. Ensure you are using Chrome on Android with HTTPS.');
+      }
+      try {
+        isWritingNFC = true;
+        const ndef = new NDEFReader();
+        alert('🏷️ Ready to write! Touch the NFC tag to the back of your phone now.');
+        await ndef.write({
+          records: [{ recordType: "text", data: currentBinId }]
+        });
+        alert('✅ Success! Bin ID (' + currentBinId + ') written to NFC tag.');
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          alert('Error writing NFC tag: ' + error);
+        }
+      } finally {
+        isWritingNFC = false;
+      }
+    }
+
+    async function startNfcScan() {
+      if (!('NDEFReader' in window)) {
+        return alert('Web NFC is not supported on this browser/device.');
+      }
+      try {
+        const ndef = new NDEFReader();
+        await ndef.scan();
+        alert('📡 Ready to scan! Touch an NFC tag to the back of your phone to open its bin.');
+
+        ndef.addEventListener("reading", ({ message, serialNumber }) => {
+          for (const record of message.records) {
+            const textDecoder = new TextDecoder(record.encoding);
+            const tagData = textDecoder.decode(record.data);
+            const foundBin = bins.find(b => b.id === tagData);
+            if (foundBin) {
+              openBinDetail(foundBin.id);
+            } else {
+              alert('Scanned Tag ID: ' + tagData + ' - No matching bin found in storage.');
+            }
+          }
+        });
+      } catch (error) {
+        alert('NFC Scan Error: ' + error);
+      }
+    }
+
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(bins));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "storage_bins_backup.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // Initial load
+    renderBins();
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+</body>
+</html>
