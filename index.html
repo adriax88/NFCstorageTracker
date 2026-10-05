@@ -1,70 +1,113 @@
-function saveNewItem() {
-  const nameInput = document.getElementById('newItemName');
-  const name = nameInput ? nameInput.value.trim() : '';
-
-  if (!name) {
-    alert('Please enter an item name');
-    return;
-  }
-
-  const bin = bins.find(b => b.id === currentBinId);
-  if (!bin) return;
-
-  if (!bin.items) bin.items = [];
-
-  const saveBtn = document.getElementById('saveItemBtn');
-  saveBtn.innerText = 'Compressing...';
-  saveBtn.disabled = true;
-
-  const cameraInput = document.getElementById('newItemPhotoCamera');
-  const galleryInput = document.getElementById('newItemPhotoGallery');
-  const dateStr = new Date().toLocaleDateString();
-
-  const photoFile = (cameraInput && cameraInput.files && cameraInput.files[0]) || 
-                     (galleryInput && galleryInput.files && galleryInput.files[0]);
-
-  const finishSave = (photo) => {
-    // Preserve edit status before clearing state
-    const isEditing = editingItemIndex !== null;
-
-    // 1. Update the data
-    if (isEditing) {
-      bin.items[editingItemIndex] = {
-        name: name,
-        date: bin.items[editingItemIndex].date || dateStr,
-        photo: photo
-      };
-    } else {
-      bin.items.push({
-        name: name,
-        date: dateStr,
-        photo: photo
-      });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFC Storage Tracker v1.7</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #121318;
+      --card-bg: #1c1e24;
+      --primary: #bb86fc;
+      --primary-variant: #3700b3;
+      --secondary: #03dac6;
+      --text: #e1e1e6;
+      --text-dim: #a0a0b0;
+      --danger: #cf6679;
+      --border: #2e323e;
+      --success: #81c784;
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding-bottom: 80px; max-width: 600px; margin: 0 auto; }
+    header { background-color: var(--card-bg); padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+    h1 { font-size: 1.2rem; color: var(--primary); }
+    .container { padding: 16px; }
+    .card { background: var(--card-bg); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+    .btn { background: var(--primary); color: #000; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+    .btn-secondary { background: transparent; color: var(--secondary); border: 1px solid var(--secondary); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-block { width: 100%; justify-content: center; margin-top: 8px; }
+    .input-group { margin-bottom: 12px; }
+    label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; }
+    input, select, textarea { width: 100%; padding: 10px; background: #0002; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 1rem; }
+    .bin-header { display: flex; justify-content: space-between; align-items: center; }
+    .item-list { margin-top: 12px; }
+    .item-card { background: #252830; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 12px; align-items: center; }
+    .item-img { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; background: var(--border); flex-shrink: 0; cursor: pointer; transition: transform 0.15s ease; }
+    .item-img:active { transform: scale(0.95); }
+    .item-info { flex-grow: 1; }
+    .item-title { font-weight: bold; }
+    .item-date { font-size: 0.75rem; color: var(--text-dim); }
+    .action-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .hidden { display: none !important; }
+    .modal { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 16px; }
+    .modal-content { background: var(--card-bg); width: 100%; max-width: 500px; border-radius: 12px; padding: 20px; border: 1px solid var(--border); }
+    
+    #imageZoomModal { z-index: 200; background: rgba(0, 0, 0, 0.9); }
+    .zoom-content { max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .zoom-img { max-width: 100%; max-height: 70vh; border-radius: 8px; object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.8); }
 
-    // 2. Persist to storage
-    saveToStorage();
+    .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: bold; display: inline-block; }
+    .badge-success { background: rgba(129, 199, 132, 0.2); color: var(--success); border: 1px solid var(--success); }
+    .badge-warning { background: rgba(255, 183, 77, 0.2); color: #ffb74d; border: 1px solid #ffb74d; }
 
-    // 3. Close modal and reset form
-    closeModal('addItemModal');
-    saveBtn.innerText = 'Save Item';
-    saveBtn.disabled = false;
-    editingItemIndex = null;
-    currentPhotoData = null;
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--secondary); color: #000; padding: 12px 24px; border-radius: 25px; font-weight: bold; font-size: 0.9rem; z-index: 1000; transition: opacity 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  </style>
+</head>
+<body>
 
-    // 4. Update UI screens
-    renderItems(bin);
-    renderBins();
+  <header>
+    <h1>📦 Storage Tracker</h1>
+    <button class="btn btn-secondary" onclick="exportData()">Backup</button>
+  </header>
 
-    // 5. Show toast feedback using preserved status
-    showToast(isEditing ? '✓ Item Updated!' : '✓ Item Saved!');
-  };
+  <div id="toast" class="hidden"></div>
 
-  if (photoFile) {
-    compressImage(photoFile, function(compressedBase64) {
-      finishSave(compressedBase64 || currentPhotoData);
-    });
-  } else {
-    finishSave(currentPhotoData);
-  }
-}
+  <div class="container">
+    <div class="action-bar">
+      <button class="btn btn-block" onclick="startNfcScan()">📡 Scan NFC Tag</button>
+      <button class="btn btn-secondary btn-block" onclick="openAddBinModal()">+ New Bin</button>
+    </div>
+
+    <div id="mainView">
+      <h2>Your Storage Bins</h2>
+      <div id="binsList" style="margin-top: 12px;"></div>
+    </div>
+
+    <!-- Bin Details View -->
+    <div id="binDetailView" class="hidden">
+      <button class="btn btn-secondary" onclick="showMainView()" style="margin-bottom: 12px;">← Back to Bins</button>
+      <div class="card">
+        <div class="bin-header">
+          <div>
+            <h2 id="detailBinName">Bin Name</h2>
+            <p id="detailBinCategory" style="color: var(--text-dim); font-size: 0.85rem; margin-top: 2px;"></p>
+          </div>
+          <div id="detailTagStatus"></div>
+        </div>
+        
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button class="btn" onclick="writeNfcTag()">🏷 Write NFC Tag</button>
+          <button class="btn btn-danger" onclick="deleteCurrentBin()">Delete Bin</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Items in this Bin</h3>
+        <button class="btn btn-block" onclick="openAddItemModal()" style="margin-top: 8px;">+ Add Item to Bin</button>
+        <div id="itemsContainer" class="item-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Bin Modal -->
+  <div id="addBinModal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="binModalTitle">Add New Storage Bin</h3>
+      <div class="input-group" style="margin-top: 12px;">
+        <label>Bin Name / ID</label>
+        <input type="text" id="newBinName" placeholder="e.g. Bin #1 - Halloween">
+      </div>
+      <div
